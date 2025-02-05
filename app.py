@@ -1,39 +1,42 @@
-from flask import Flask, request, jsonify
-import requests  # Importing requests to interact with external APIs
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import requests
+from fastapi.middleware.cors import CORSMiddleware
+import os
 
-app = Flask(__name__)
+# Initialize FastAPI app
+app = FastAPI()
 
-# Set your Gore API endpoint and API key here (replace with actual endpoint and API key)
-GORE_API_URL = "https://api.goreapi.com/chat"  # Example URL, replace with actual Gore API endpoint
-GORE_API_KEY = "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"  # Replace with your actual Gore API key
+# Configure CORS (allow frontend to communicate with backend)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Change this to specific frontend origins for security
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.route("/chat", methods=["POST"])
-def chat():
+# Set your Gorq API Key
+gorq_api_key = "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"
+GORQ_API_URL = "https://api.gorq.com/chat"
+
+# Define request model
+class ChatRequest(BaseModel):
+    message: str
+
+# Chatbot API endpoint
+@app.post("/chat/")
+def chat(request: ChatRequest):
     try:
-        # Getting message from the request payload
-        data = request.json
-        user_message = data.get("message")
-
-        # Define the payload for the API request
-        payload = {
-            "message": user_message,
-            "api_key": GORE_API_KEY
-        }
-
-        # Make an HTTP POST request to the Gore API
-        response = requests.post(GORE_API_URL, json=payload)
-
-        # If the request is successful, return the response
-        if response.status_code == 200:
-            api_response = response.json()
-            return jsonify({"response": api_response.get("response")})
-
-        # If the response is not successful, return an error message
-        return jsonify({"error": "Failed to get response from Gore API"}), 500
-
+        headers = {"Authorization": f"Bearer {gorq_api_key}", "Content-Type": "application/json"}
+        data = {"message": request.message}
+        response = requests.post(GORQ_API_URL, json=data, headers=headers)
+        response.raise_for_status()
+        reply = response.json().get("response", "No response from Gorq API")
+        return {"response": reply}
     except Exception as e:
-        # Catch any exceptions and return an error message
-        return jsonify({"error": str(e)}), 400
+        raise HTTPException(status_code=500, detail=str(e))
 
-if __name__ == "__main__":
-    app.run(debug=True)
+# Root endpoint
+def read_root():
+    return {"message": "Chatbot backend is running!"}
